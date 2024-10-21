@@ -18,6 +18,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def count_newlines(input_string: str) -> int:
+    return input_string.count('\n')
+
 def create_instance(repo: Repo, pull: dict) -> dict:
     """
     Create a single task instance from a pull request, where task instance is:
@@ -31,6 +34,7 @@ def create_instance(repo: Repo, pull: dict) -> dict:
     }
     """
     patch, test_patch = extract_patches(pull, repo)
+    patch_ln, test_patch_ln = count_newlines(patch), count_newlines(test_patch)
     problem_statement, hints = extract_problem_statement_and_hints(pull, repo)
     return {
         "repo": repo.repo.full_name,
@@ -42,6 +46,8 @@ def create_instance(repo: Repo, pull: dict) -> dict:
         "base_commit": pull["base"]["sha"],
         "patch": patch,
         "test_patch": test_patch,
+        "patch_line_number": patch_ln,
+        "test_patch_line_number": test_patch_ln,
         "problem_statement": problem_statement,
         "hints_text": hints,
         "created_at": pull["created_at"],
