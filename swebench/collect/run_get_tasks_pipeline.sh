@@ -5,7 +5,7 @@
 # * Declare GITHUB_TOKENS=token1,token2,token3...
 
 python get_tasks_pipeline.py \
-    --repos 'scikit-learn/scikit-learn'\
+    --repos 'astropy/astropy'\
     --path_prs '/Users/joyang/Development/swe-dream/swebench/collect/prs' \
     --path_tasks '/Users/joyang/Development/swe-dream/swebench/collect/tasks' \
     --max_pulls 100 \
