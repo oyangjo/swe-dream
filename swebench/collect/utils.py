@@ -307,29 +307,38 @@ def _extract_hints(pull: dict, repo: Repo, issue_number: int) -> list[str]:
     return comments
 
 
-def extract_patches(pull: dict, repo: Repo) -> tuple[str, str]:
+def extract_patches(pull: dict) -> tuple[str, str]:
     """
     Get patch and test patch from PR
 
     Args:
         pull (dict): PR dictionary object from GitHub
-        repo (Repo): Repo object
     Return:
-        patch_change_str (str): gold patch
-        patch_test_str (str): test patch
+        patch_change_str (str): gold patch (code changes)
+        patch_test_str (str): test patch (test-related changes)
     """
-    patch = requests.get(pull["diff_url"]).text
-    patch_test = ""
-    patch_fix  = ""
+    # Fetch the patch from the diff URL
+    response = requests.get(pull["diff_url"])
+
+    # Check if the response was successful
+    if response.status_code != 200:
+        raise Exception(f"Failed to fetch diff from {pull['diff_url']}: {response.status_code}")
+
+    patch = response.text
+
+    # Initialize lists to collect patch changes and test-related changes
+    patch_test = []
+    patch_fix  = []
+
+    # Parse the patch and separate code changes from test changes
     for hunk in PatchSet(patch):
-        if any(
-            test_word in hunk.path for test_word in
-            ['test', 'tests', 'e2e', 'testing']
-        ):
-            patch_test += str(hunk)
+        if any(test_word in hunk.path.lower() for test_word in ['test', 'tests', 'e2e', 'testing']):
+            patch_test.append(str(hunk))
         else:
-            patch_fix += str(hunk)
-    return patch_fix, patch_test
+            patch_fix.append(str(hunk))
+
+    # Join the lists into strings and return the results
+    return ''.join(patch_fix), ''.join(patch_test)
 
 
 ### MARK: Repo Specific Parsing Functions ###

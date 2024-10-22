@@ -33,7 +33,7 @@ def create_instance(repo: Repo, pull: dict) -> dict:
         test_patch (str): test suite as .patch (apply to base commit),
     }
     """
-    patch, test_patch = extract_patches(pull, repo)
+    patch, test_patch = extract_patches(pull)
     patch_ln, test_patch_ln = count_newlines(patch), count_newlines(test_patch)
     problem_statement, hints = extract_problem_statement_and_hints(pull, repo)
     return {
