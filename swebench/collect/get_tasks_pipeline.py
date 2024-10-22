@@ -43,7 +43,7 @@ def construct_data_files(data: dict):
 
     Args:
         data (dict): Dictionary containing the following keys:
-            repos (list): List of repositories to retrieve instruction data for
+            repos (list): List of repositories to retrieve instruction data for: ['owner/repo', ...]
             path_prs (str): Path to save PR data files to
             path_tasks (str): Path to save task instance data files to
             token (str): GitHub token to use for API requests
