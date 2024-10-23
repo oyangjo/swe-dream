@@ -4,13 +4,18 @@
 
 import argparse, os
 import traceback
+import logging
 
 from dotenv import load_dotenv
 from multiprocessing import Pool
 from swebench.collect.build_dataset import main as build_dataset
 from swebench.collect.print_pulls import main as print_pulls
 
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
+logger = logging.getLogger(__name__)
 load_dotenv()
 
 
@@ -64,7 +69,7 @@ def construct_data_files(data: dict):
             if cutoff_date:
                 path_pr = path_pr.replace(".jsonl", f"-{cutoff_date}.jsonl")
             if not os.path.exists(path_pr):
-                print(f"Pull request data for {repo} not found, creating...")
+                logger.info(f"Pull request data for {repo} not found, creating...")
                 print_pulls(
                     repo,
                     path_pr,
@@ -72,23 +77,23 @@ def construct_data_files(data: dict):
                     max_pulls=max_pulls,
                     cutoff_date=cutoff_date
                 )
-                print(f"✅ Successfully saved PR data for {repo} to {path_pr}")
+                logger.info(f"✅ Successfully saved PR data for {repo} to {path_pr}")
             else:
-                print(f"📁 Pull request data for {repo} already exists at {path_pr}, skipping...")
+                logger.info(f"📁 Pull request data for {repo} already exists at {path_pr}, skipping...")
 
             path_task = os.path.join(path_tasks, f"{repo_name}-task-instances.jsonl")
             if not os.path.exists(path_task):
-                print(f"Task instance data for {repo} not found, creating...")
+                logger.info(f"Task instance data for {repo} not found, creating...")
                 build_dataset(path_pr, path_task, token)
-                print(f"✅ Successfully saved task instance data for {repo} to {path_task}")
+                logger.info(f"✅ Successfully saved task instance data for {repo} to {path_task}")
             else:
-                print(f"📁 Task instance data for {repo} already exists at {path_task}, skipping...")
+                logger.info(f"📁 Task instance data for {repo} already exists at {path_task}, skipping...")
         except Exception as e:
-            print("-"*80)
-            print(f"Something went wrong for {repo}, skipping: {e}")
-            print("Here is the full traceback:")
+            logger.error("-"*80)
+            logger.error(f"Something went wrong for {repo}, skipping: {e}")
+            logger.error("Here is the full traceback:")
             traceback.print_exc()
-            print("-"*80)
+            logger.error("-"*80)
 
 
 def main(
@@ -108,9 +113,9 @@ def main(
         cutoff_date (str): Cutoff date for PRs to consider in format YYYYMMDD
     """
     path_prs, path_tasks = os.path.abspath(path_prs), os.path.abspath(path_tasks)
-    print(f"Will save PR data to {path_prs}")
-    print(f"Will save task instance data to {path_tasks}")
-    print(f"Received following repos to create task instances for: {repos}")
+    logger.info(f"Will save PR data to {path_prs}")
+    logger.info(f"Will save task instance data to {path_tasks}")
+    logger.info(f"Received following repos to create task instances for: {repos}")
 
     tokens = os.getenv("GITHUB_TOKENS")
     if not tokens: raise Exception("Missing GITHUB_TOKENS, consider rerunning with GITHUB_TOKENS=$(gh auth token)")
