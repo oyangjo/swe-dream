@@ -5,6 +5,7 @@ import logging
 import re
 import requests
 import time
+import base64
 
 from bs4 import BeautifulSoup
 from ghapi.core import GhApi
@@ -306,8 +307,49 @@ def _extract_hints(pull: dict, repo: Repo, issue_number: int) -> list[str]:
     comments = [comment.body for comment in comments]
     return comments
 
+def get_file_content(blob_url: str) -> str:
+    """Fetch the full content of a file using its SHA."""
+    response = requests.get(blob_url)
+    response.raise_for_status()
+    content = response.json()['content']
+    return base64.b64decode(content).decode('utf-8')
 
-def extract_patches(pull: dict) -> tuple[str, str]:
+def extract_test_names_from_content(file_content: str) -> List[str]:
+    """Extract test function names from the full file content."""
+    # Regular expression to identify test function names
+    test_func_pattern = re.compile(r'def (test_\w+)\(')
+    return test_func_pattern.findall(file_content)
+
+def extract_test_info(diff_text: str) -> str:
+    # Regular expressions to match file paths and test function names
+    file_path_pattern = r'^diff --git a/(.+) b/\1'
+    test_name_pattern = r'^\+def (\w+)\('
+    
+    # Initialize variables to store the extracted information
+    file_path = None
+    test_names = []
+
+    # Split the diff text by lines and iterate
+    for line in diff_text.splitlines():
+        # Find the file path
+        file_path_match = re.match(file_path_pattern, line)
+        if file_path_match:
+            file_path = file_path_match.group(1)
+        
+        # Find the added test function name
+        test_name_match = re.match(test_name_pattern, line)
+        if test_name_match:
+            test_names.append(test_name_match.group(1))
+
+    # Return result in desired format
+    tests = []
+    if file_path and test_names:
+        for test_name in test_names:
+            tests.append(f"{file_path}::{test_name}")
+
+    return file_path, tests
+
+def extract_patches(pull: dict) -> tuple[str, str, list[str], list[str]]:
     """
     Get patch and test patch from PR
 
@@ -317,28 +359,55 @@ def extract_patches(pull: dict) -> tuple[str, str]:
         patch_change_str (str): gold patch (code changes)
         patch_test_str (str): test patch (test-related changes)
     """
+    url = pull["url"]
+    file_url = url + "/files"
+    diff_url = pull["diff_url"]
+    blob_url = url.split("pulls")[0] + "git/blobs/"
+
     # Fetch the patch from the diff URL
-    response = requests.get(pull["diff_url"])
+    diff_response = requests.get(diff_url)
+    file_response = requests.get(file_url)
 
     # Check if the response was successful
-    if response.status_code != 200:
-        raise Exception(f"Failed to fetch diff from {pull['diff_url']}: {response.status_code}")
+    if diff_response.status_code != 200:
+        raise Exception(f"Failed to fetch diff from {pull['diff_url']}: {diff_response.status_code}")
+    if file_response.status_code != 200:
+        raise Exception(f"Failed to fetch files from {pull['url']}: {file_response.status_code}")
 
-    patch = response.text
+    file_details = {file['filename']: file['sha'] for file in file_response.json()}
+    patch = diff_response.text
 
     # Initialize lists to collect patch changes and test-related changes
     patch_test = []
     patch_fix  = []
+    test_fps = []
+    p2ps = []
 
     # Parse the patch and separate code changes from test changes
     for hunk in PatchSet(patch):
+        str_hunk = str(hunk)
         if any(test_word in hunk.path.lower() for test_word in ['test', 'tests', 'e2e', 'testing']):
-            patch_test.append(str(hunk))
+            patch_test.append(str_hunk)
+
+            # Extract test file path and test function names
+            test_fp, _ = extract_test_info(str_hunk)
+            if test_fp:
+                test_fps.append(test_fp)
+
+                # Always get full file content
+                file_sha = file_details.get(test_fp)
+                if file_sha:
+                    file_content = get_file_content(blob_url + file_sha)
+                    test_names = extract_test_names_from_content(file_content)
+
+                    # Combine file path and test names
+                    for test_name in test_names:
+                        p2ps.append(f"{test_fp}::{test_name}")
         else:
-            patch_fix.append(str(hunk))
+            patch_fix.append(str_hunk)
 
     # Join the lists into strings and return the results
-    return ''.join(patch_fix), ''.join(patch_test)
+    return ''.join(patch_fix), ''.join(patch_test), test_fps, p2ps
 
 
 ### MARK: Repo Specific Parsing Functions ###

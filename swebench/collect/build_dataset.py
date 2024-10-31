@@ -33,7 +33,9 @@ def create_instance(repo: Repo, pull: dict) -> dict:
         test_patch (str): test suite as .patch (apply to base commit),
     }
     """
-    patch, test_patch = extract_patches(pull)
+    logger.info(f"Creating task instance for {repo.repo.full_name}#{pull['number']}")
+
+    patch, test_patch, test_fps, p2ps = extract_patches(pull)
     patch_ln, test_patch_ln = count_newlines(patch), count_newlines(test_patch)
     problem_statement, hints = extract_problem_statement_and_hints(pull, repo)
     return {
@@ -46,6 +48,8 @@ def create_instance(repo: Repo, pull: dict) -> dict:
         "base_commit": pull["base"]["sha"],
         "patch": patch,
         "test_patch": test_patch,
+        "test_file": test_fps,
+        "pass_to_pass": p2ps,
         "patch_line_number": patch_ln,
         "test_patch_line_number": test_patch_ln,
         "problem_statement": problem_statement,
@@ -109,6 +113,8 @@ def main(pr_file: str, output: str, token: Optional[str] = None):
         output (str): output file name
         token (str): GitHub token
     """
+    print(f"Creating task instances from {pr_file} and writing to {output}")
+
     if token is None:
         # Get GitHub token from environment variable if not provided
         token = os.environ.get("GITHUB_TOKEN")
@@ -143,6 +149,7 @@ def main(pr_file: str, output: str, token: Optional[str] = None):
     logger.info(f"Will skip {len(seen_prs)} pull requests that have already been inspected")
 
     # Write to .all file for all PRs
+    print(f"Writing to {all_output}")
     write_mode_all = "w" if not os.path.exists(all_output) else "a"
     with open(all_output, write_mode_all) as all_output:
         # Write to output file for PRs with test suites
@@ -175,9 +182,7 @@ def main(pr_file: str, output: str, token: Optional[str] = None):
                 instance = create_instance(repo, pull)
                 if is_valid_instance(instance):
                     # If valid, write to .all output file
-                    print(
-                        json.dumps(instance), end="\n", flush=True, file=all_output
-                    )  # write all instances to a separate file
+                    print(json.dumps(instance), end="\n", flush=True, file=all_output)
                     completed += 1
                     if has_test_patch(instance):
                         # If has test suite, write to output file
