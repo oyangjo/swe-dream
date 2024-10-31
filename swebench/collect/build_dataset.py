@@ -35,7 +35,7 @@ def create_instance(repo: Repo, pull: dict) -> dict:
     """
     logger.info(f"Creating task instance for {repo.repo.full_name}#{pull['number']}")
 
-    patch, test_patch, test_fps, p2ps = extract_patches(pull)
+    patch, test_patch, test_fps, f2ps, p2ps = extract_patches(pull)
     patch_ln, test_patch_ln = count_newlines(patch), count_newlines(test_patch)
     problem_statement, hints = extract_problem_statement_and_hints(pull, repo)
     return {
@@ -49,6 +49,7 @@ def create_instance(repo: Repo, pull: dict) -> dict:
         "patch": patch,
         "test_patch": test_patch,
         "test_file": test_fps,
+        "fail_to_pass": f2ps,
         "pass_to_pass": p2ps,
         "patch_line_number": patch_ln,
         "test_patch_line_number": test_patch_ln,

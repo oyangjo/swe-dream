@@ -314,11 +314,25 @@ def get_file_content(blob_url: str) -> str:
     content = response.json()['content']
     return base64.b64decode(content).decode('utf-8')
 
-def extract_test_names_from_content(file_content: str) -> List[str]:
-    """Extract test function names from the full file content."""
-    # Regular expression to identify test function names
-    test_func_pattern = re.compile(r'def (test_\w+)\(')
-    return test_func_pattern.findall(file_content)
+def extract_test_names_with_content(file_content: str):
+    """
+    Extract all function names and their content from the full file content.
+    
+    Returns:
+        A dictionary where each key is a function name, and each value is the content of that function.
+    """
+    # Regular expression to capture all function names and their content until the next function or end of file
+    func_pattern = re.compile(r'def (\w+)\(.*?\):\n(.*?)(?=\ndef |\Z)', re.DOTALL)
+    
+    # Dictionary to store the function names and their content
+    functions = {}
+
+    for match in func_pattern.finditer(file_content):
+        func_name = match.group(1)  # Function name
+        func_content = match.group(2).strip()  # Function body content, removing any leading/trailing whitespace
+        functions[func_name] = func_content
+
+    return functions
 
 def extract_test_info(diff_text: str) -> str:
     # Regular expressions to match file paths and test function names
@@ -381,16 +395,17 @@ def extract_patches(pull: dict) -> tuple[str, str, list[str], list[str]]:
     patch_test = []
     patch_fix  = []
     test_fps = []
+    f2ps = []
     p2ps = []
 
     # Parse the patch and separate code changes from test changes
     for hunk in PatchSet(patch):
         str_hunk = str(hunk)
-        if any(test_word in hunk.path.lower() for test_word in ['test', 'tests', 'e2e', 'testing']):
+        if any(test_word in hunk.path.lower() for test_word in ['test', 'tests', 'e2e', 'testing']): # Test-related changes
             patch_test.append(str_hunk)
 
             # Extract test file path and test function names
-            test_fp, _ = extract_test_info(str_hunk)
+            test_fp, f2p = extract_test_info(str_hunk)
             if test_fp:
                 test_fps.append(test_fp)
 
@@ -398,16 +413,20 @@ def extract_patches(pull: dict) -> tuple[str, str, list[str], list[str]]:
                 file_sha = file_details.get(test_fp)
                 if file_sha:
                     file_content = get_file_content(blob_url + file_sha)
-                    test_names = extract_test_names_from_content(file_content)
+                    test_names_to_test = extract_test_names_with_content(file_content)
+                    test_names = list(test_names_to_test.keys())
 
                     # Combine file path and test names
                     for test_name in test_names:
-                        p2ps.append(f"{test_fp}::{test_name}")
+                        full_test_name = f"{test_fp}::{test_name}"
+                        if full_test_name not in f2p:
+                            p2ps.append(full_test_name)
+            f2ps.extend(f2p)
         else:
             patch_fix.append(str_hunk)
 
     # Join the lists into strings and return the results
-    return ''.join(patch_fix), ''.join(patch_test), test_fps, p2ps
+    return ''.join(patch_fix), ''.join(patch_test), test_fps, f2ps, p2ps
 
 
 ### MARK: Repo Specific Parsing Functions ###
